@@ -29,7 +29,7 @@ def show_metadata(urn):
         data = response.json()
 
         import json
-        flat_json = json.dumps(data)
+        flat_json = json.dumps(data, ensure_ascii=False)
 
         title_match = re.search(r'"title"\s*:\s*"([^"]+?)"', flat_json)
         issued_match = re.search(r'"issued"\s*:\s*"(\d{4})"', flat_json)
