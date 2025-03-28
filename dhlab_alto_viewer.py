@@ -85,7 +85,7 @@ def fetch_image(urn, page, scale=0.66):
 
 def parse_alto(alto_xml):
     root = ET.fromstring(alto_xml)
-    ns = {"alto": root.tag.split("}")[0].strip("{")} if "}" in root.tag else {"alto": ""}  # Dynamisk namespace-håndtering
+    ns = {"alto": root.tag.split("}")[0].strip("{")} if "}" in root.tag else {"alto": ""}
 
     layout = root.find("alto:Layout", ns)
     if layout is None:
@@ -99,36 +99,45 @@ def parse_alto(alto_xml):
 
     width = int(page.attrib['WIDTH'])
     height = int(page.attrib['HEIGHT'])
+
     text_blocks = []
     lines = []
     words = []
     full_text = ""
 
-    for i, block in enumerate(page.findall(".//alto:TextBlock", ns)):
-        x, y, w, h = (int(block.attrib['HPOS']), int(block.attrib['VPOS']),
-                      int(block.attrib['WIDTH']), int(block.attrib['HEIGHT']))
-        text_blocks.append((x, y, w, h, i + 1))
+    block_id = 1  # Felles løpenummer for blokker uansett hvor de ligger
 
-        block_text = []
-        for line in block.findall("alto:TextLine", ns):
-            lx, ly, lw, lh = (int(line.attrib['HPOS']), int(line.attrib['VPOS']),
-                              int(line.attrib['WIDTH']), int(line.attrib['HEIGHT']))
-            lines.append((lx, ly, lw, lh))
+    for area_tag, label in [("PrintSpace", "PrintSpace"), ("TopMargin", "TopMargin"), ("BottomMargin", "BottomMargin")]:
+        area = page.find(f"alto:{area_tag}", ns)
+        if area is None:
+            continue
+        for block in area.findall(".//alto:TextBlock", ns):
+            x, y, w, h = (int(block.attrib['HPOS']), int(block.attrib['VPOS']),
+                          int(block.attrib['WIDTH']), int(block.attrib['HEIGHT']))
+            text_blocks.append((x, y, w, h, block_id, label))
+            block_id += 1
 
-            line_text = []
-            for string in line.findall("alto:String", ns):
-                wx, wy, ww, wh = (int(string.attrib['HPOS']), int(string.attrib['VPOS']),
-                                  int(string.attrib['WIDTH']), int(string.attrib['HEIGHT']))
-                words.append((wx, wy, ww, wh))
-                line_text.append(string.attrib.get('CONTENT', ''))
+            block_text = []
+            for line in block.findall("alto:TextLine", ns):
+                lx, ly, lw, lh = (int(line.attrib['HPOS']), int(line.attrib['VPOS']),
+                                  int(line.attrib['WIDTH']), int(line.attrib['HEIGHT']))
+                lines.append((lx, ly, lw, lh))
 
-            block_text.append(" ".join(line_text))
+                line_text = []
+                for string in line.findall("alto:String", ns):
+                    wx, wy, ww, wh = (int(string.attrib['HPOS']), int(string.attrib['VPOS']),
+                                      int(string.attrib['WIDTH']), int(string.attrib['HEIGHT']))
+                    words.append((wx, wy, ww, wh))
+                    line_text.append(string.attrib.get('CONTENT', ''))
 
-        full_text += "\n".join(block_text) + "\n\n"
+                block_text.append(" ".join(line_text))
+
+            full_text += "\n".join(block_text) + "\n\n"
 
     return width, height, text_blocks, lines, words, full_text.strip()
 
-def plot_alto(image, alto_width, alto_height, elements, color, show_numbers=False):
+
+def plot_alto(image, alto_width, alto_height, elements, color="red", show_numbers=False):
     fig, ax = plt.subplots(figsize=(10, 12))
     ax.imshow(image, cmap='gray')
     img_width, img_height = image.size
@@ -136,15 +145,41 @@ def plot_alto(image, alto_width, alto_height, elements, color, show_numbers=Fals
     scale_y = img_height / alto_height
 
     for element in elements:
+        # Håndter både 4-, 5- og 6-elementers tuples
         x, y, w, h = element[:4]
+        num = element[4] if len(element) > 4 else None
+        region = element[5] if len(element) > 5 else None
+
+        # Velg farge ut fra region hvis tilgjengelig
+        if region == "PrintSpace":
+            edgecolor = "red"
+            tag = None  # Ikke vis tag for PrintSpace
+        elif region == "TopMargin":
+            edgecolor = "orange"
+            tag = "TopMargin"
+        elif region == "BottomMargin":
+            edgecolor = "gray"
+            tag = "BottomMargin"
+        else:
+            edgecolor = color
+            tag = None  # Ikke vis tag for linjer og ord
+
+        # Tegn boksen
         rect = patches.Rectangle((x * scale_x, y * scale_y), w * scale_x, h * scale_y,
-                                 linewidth=1, edgecolor=color, facecolor='none')
+                                 linewidth=1, edgecolor=edgecolor, facecolor='none')
         ax.add_patch(rect)
 
-        if show_numbers and len(element) == 5:
-            ax.text((x + w / 2) * scale_x, (y + h / 2) * scale_y, str(element[4]),
-                    color='yellow', fontsize=12, ha='center', va='center',
+        # Nummer i midten av boksen (valgfritt)
+        if show_numbers and num is not None:
+            ax.text((x + w / 2) * scale_x, (y + h / 2) * scale_y, str(num),
+                    color='yellow', fontsize=10, ha='center', va='center',
                     bbox=dict(facecolor='black', alpha=0.5, edgecolor='none'))
+
+        # Vis tag kun hvis definert
+        if tag:
+            ax.text(x * scale_x + 2, y * scale_y + 2, tag,
+                    color=edgecolor, fontsize=8, ha='left', va='top',
+                    bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', boxstyle='round,pad=0.1'))
 
     ax.set_xticks([])
     ax.set_yticks([])
