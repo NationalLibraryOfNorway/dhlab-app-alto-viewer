@@ -237,5 +237,18 @@ def main():
                     file_name=f"{urn}_{page_number:04d}.txt",
                     mime="text/plain"
                 )
+                st.download_button(
+                    label="📄 Last ned ALTO-XML",
+                    data=alto_xml,
+                    file_name=f"{urn}_{page_number:04d}.xml",
+                    mime="application/xml"
+                )
+
+                image_url = f"https://www.nb.no/services/image/resolver/{urn}_{page_number:04d}/full/pct:100/0/native.jpg"
+                alto_url= f"https://api.nb.no/catalog/v1/metadata/{urn}/altos/{urn}_{page_number:04d}"
+
+                st.markdown(f'**Lenke til bilde:** <a heref="{image_url}" target="_blank">{image_url}</a>', unsafe_allow_html=True)
+                st.markdown(f'**Lenke til ALTO-XML:** <a heref="{alto_url}" target="_blank">{alto_url}</a>', unsafe_allow_html=True)
+                
 if __name__ == '__main__':
     main()
