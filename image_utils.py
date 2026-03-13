@@ -6,14 +6,20 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import streamlit as st
 
-def fetch_image(urn, page, scale=0.5):
-    url = f"https://www.nb.no/services/image/resolver/{urn}_{page:04d}/full/pct:{int(scale * 100)}/0/native.jpg"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return Image.open(BytesIO(response.content))
-    else:
-        st.error(f"Kunne ikke hente bilde for side {page}. Status: {response.status_code}")
-        return None
+@st.cache_data(show_spinner=False)
+def fetch_image(page_id, page_number, scale=0.5):
+    url = f"https://www.nb.no/services/image/resolver/{page_id}/full/pct:{int(scale * 100)}/0/native.jpg"
+    try:
+        response = requests.get(url, timeout=15)
+        if response.status_code == 200:
+            return Image.open(BytesIO(response.content))
+        if response.status_code == 404:
+            st.info(f"Ingen bilde tilgjengelig for side {page_number}.")
+        else:
+            st.warning(f"Kunne ikke hente bilde for side {page_number}. Status: {response.status_code}")
+    except requests.RequestException as e:
+        st.error(f"Nettverksfeil ved henting av bilde: {e}")
+    return None
 
 def plot_alto(image, alto_width, alto_height, elements, color="red", show_numbers=False):
     fig, ax = plt.subplots(figsize=(10, 12))
@@ -62,3 +68,4 @@ def plot_alto(image, alto_width, alto_height, elements, color="red", show_number
     ax.set_xticks([])
     ax.set_yticks([])
     st.pyplot(fig)
+    plt.close(fig)

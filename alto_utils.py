@@ -3,7 +3,14 @@ import xml.etree.ElementTree as ET
 import streamlit as st  
 
 def parse_alto(alto_xml):
-    root = ET.fromstring(alto_xml)
+    if not alto_xml:
+        return None, None, [], [], [], ""
+    try:
+        root = ET.fromstring(alto_xml)
+    except ET.ParseError:
+        st.error("Feil: Kunne ikke lese ALTO XML (ugyldig format)")
+        return None, None, [], [], [], ""
+
     ns = {"alto": root.tag.split("}")[0].strip("{")} if "}" in root.tag else {"alto": ""}
 
     layout = root.find("alto:Layout", ns)
@@ -16,8 +23,33 @@ def parse_alto(alto_xml):
         st.error("Feil: Page-element ikke funnet i ALTO XML")
         return None, None, [], [], [], ""
 
-    width = int(page.attrib['WIDTH'])
-    height = int(page.attrib['HEIGHT'])
+    try:
+        width = int(page.attrib['WIDTH'])
+        height = int(page.attrib['HEIGHT'])
+    except (KeyError, ValueError):
+        st.error("Feil: Manglende eller ugyldig WIDTH/HEIGHT på Page-element")
+        return None, None, [], [], [], ""
+
+    # Noen ALTO-filer (f.eks. fra NB.no) har inkonsistente koordinatsystem der
+    # TextBlock-koordinater bruker et stort ALTO-rom (f.eks. 3439×5063) mens
+    # TextLine/String-koordinater bruker Page-dimensjonene (f.eks. 1289×2012).
+    # Beregn det faktiske ALTO-rommet fra area-elementene, og normaliser
+    # TextBlock-koordinater til Page-rommet. TextLine/String brukes uendret.
+    alto_w, alto_h = width, height
+    for area_tag in ["TopMargin", "BottomMargin", "PrintSpace", "LeftMargin", "RightMargin"]:
+        area = page.find(f"alto:{area_tag}", ns)
+        if area is not None:
+            try:
+                ax = int(area.attrib.get("HPOS", 0))
+                ay = int(area.attrib.get("VPOS", 0))
+                aw = int(area.attrib.get("WIDTH", 0))
+                ah = int(area.attrib.get("HEIGHT", 0))
+                alto_w = max(alto_w, ax + aw)
+                alto_h = max(alto_h, ay + ah)
+            except ValueError:
+                pass
+    block_scale_x = width / alto_w if alto_w > width * 1.1 else 1.0
+    block_scale_y = height / alto_h if alto_h > height * 1.1 else 1.0
 
     text_blocks = []
     lines = []
@@ -31,21 +63,34 @@ def parse_alto(alto_xml):
         if area is None:
             continue
         for block in area.findall(".//alto:TextBlock", ns):
-            x, y, w, h = (int(block.attrib['HPOS']), int(block.attrib['VPOS']),
-                          int(block.attrib['WIDTH']), int(block.attrib['HEIGHT']))
-            text_blocks.append((x, y, w, h, block_id, label))
+            try:
+                x, y, w, h = (int(block.attrib.get('HPOS', 0)), int(block.attrib.get('VPOS', 0)),
+                              int(block.attrib.get('WIDTH', 0)), int(block.attrib.get('HEIGHT', 0)))
+            except ValueError:
+                continue
+            bx = round(x * block_scale_x)
+            by = round(y * block_scale_y)
+            bw = round(w * block_scale_x)
+            bh = round(h * block_scale_y)
+            text_blocks.append((bx, by, bw, bh, block_id, label))
             block_id += 1
 
             block_text = []
             for line in block.findall("alto:TextLine", ns):
-                lx, ly, lw, lh = (int(line.attrib['HPOS']), int(line.attrib['VPOS']),
-                                  int(line.attrib['WIDTH']), int(line.attrib['HEIGHT']))
+                try:
+                    lx, ly, lw, lh = (int(line.attrib.get('HPOS', 0)), int(line.attrib.get('VPOS', 0)),
+                                      int(line.attrib.get('WIDTH', 0)), int(line.attrib.get('HEIGHT', 0)))
+                except ValueError:
+                    continue
                 lines.append((lx, ly, lw, lh))
 
                 line_text = []
                 for string in line.findall("alto:String", ns):
-                    wx, wy, ww, wh = (int(string.attrib['HPOS']), int(string.attrib['VPOS']),
-                                      int(string.attrib['WIDTH']), int(string.attrib['HEIGHT']))
+                    try:
+                        wx, wy, ww, wh = (int(string.attrib.get('HPOS', 0)), int(string.attrib.get('VPOS', 0)),
+                                          int(string.attrib.get('WIDTH', 0)), int(string.attrib.get('HEIGHT', 0)))
+                    except ValueError:
+                        continue
                     words.append((wx, wy, ww, wh))
                     line_text.append(string.attrib.get('CONTENT', ''))
 
@@ -56,7 +101,12 @@ def parse_alto(alto_xml):
     return width, height, text_blocks, lines, words, full_text.strip()
 
 def extract_ocr_info(alto_xml):
-    root = ET.fromstring(alto_xml)
+    if not alto_xml:
+        return []
+    try:
+        root = ET.fromstring(alto_xml)
+    except ET.ParseError:
+        return []
     info = []
 
     # Finn <Description>
@@ -104,8 +154,12 @@ def extract_ocr_info(alto_xml):
     return info
 
 def extract_avg_wc(alto_xml):
-    import xml.etree.ElementTree as ET
-    root = ET.fromstring(alto_xml)
+    if not alto_xml:
+        return None
+    try:
+        root = ET.fromstring(alto_xml)
+    except ET.ParseError:
+        return None
     wc_values = []
     for word in root.findall(".//String"):
         wc_str = word.attrib.get("WC")
