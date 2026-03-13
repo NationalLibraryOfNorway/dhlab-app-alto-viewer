@@ -1,5 +1,5 @@
+import base64
 import streamlit as st
-
 
 from alto_utils import parse_alto, extract_avg_wc, extract_ocr_info
 from image_utils import fetch_image, plot_alto
@@ -7,11 +7,100 @@ from metadata_utils import extract_urn_or_lookup, fetch_iiif_manifest, get_page_
 from download_utils import fetch_alto, fetch_full_document_text
 
 
+def _svg_b64():
+    try:
+        with open("favicon.svg", "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except FileNotFoundError:
+        return ""
+
 
 def main():
-    st.title("ALTO-visning for dokumenter fra nb.no")
+    svg_b64 = _svg_b64()
+
+    st.set_page_config(
+        page_title="DH-LAB | ALTO-visning",
+        page_icon=f"data:image/svg+xml;base64,{svg_b64}" if svg_b64 else "📄",
+        layout="centered",
+    )
+
+    st.markdown(f"""
+    <style>
+    /* Fonter */
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;600&display=swap');
+    :root {{
+        --mono: 'IBM Plex Mono', ui-monospace, monospace;
+        --sans: 'IBM Plex Sans', system-ui, sans-serif;
+    }}
+    html, body, .stApp, p, label {{
+        font-family: var(--sans);
+    }}
+    h1 {{
+        font-family: var(--mono);
+        font-weight: 700;
+        color: #40263E;
+    }}
+    h2, h3 {{
+        font-family: var(--mono);
+    }}
+/* Knapper */
+    .stButton > button {{
+        background-color: #40263E;
+        color: #FFFFFF;
+        border: none;
+        border-radius: 4px;
+    }}
+    .stButton > button:hover {{
+        background-color: #1A1A1A;
+        color: #FFFFFF;
+        border: none;
+    }}
+    .stButton > button:disabled {{
+        background-color: #E0E0E0;
+        color: #1A1A1A66;
+        border: none;
+    }}
+    /* Nedlastingsknapp */
+    .stDownloadButton > button {{
+        background-color: #40263E;
+        color: #FFFFFF;
+        border: none;
+        border-radius: 4px;
+    }}
+    .stDownloadButton > button:hover {{
+        background-color: #40263E;
+        color: #FFFFFF;
+        border: none;
+    }}
+    /* Ekspandere */
+    details summary {{
+        color: #550029;
+        font-weight: 600;
+    }}
+    /* Lenker */
+    a {{
+        color: #40263E !important;
+    }}
+    a:hover {{
+        color: #1A1A1A !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.title("ALTO-visning")
+    st.markdown("Visualiser layout og hent ut tekst fra dokumenter på nb.no.")
 
     with st.sidebar:
+        st.markdown(f"""
+        <div style="padding: 1.5rem 0 2rem 0; border-bottom: 1px solid #E0E0E0; margin-bottom: 1.5rem;">
+            <a href="https://dh.nb.no" target="_blank" style="text-decoration: none; color: inherit;">
+                <img src="data:image/svg+xml;base64,{svg_b64}" height="32" alt="DH-LAB logo" style="margin-bottom: 0.5rem; display: block;">
+                <div style="font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; font-size: 15px; color: #1A1A1A; line-height: 1.3;">DH-LAB</div>
+                <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; color: #1A1A1A99; line-height: 1.3;">Nasjonalbiblioteket</div>
+            </a>
+        </div>
+        """, unsafe_allow_html=True)
+
         user_input = st.text_input(
             "Lim inn URN eller lenke til dokument",
             value="URN:NBN:no-nb_digibok_2016040508078"

@@ -6,7 +6,8 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
         COPY requirements.txt ./requirements.txt
         RUN uv pip install --system --compile-bytecode --only-binary=:all: --no-binary=python-louvain -r requirements.txt
 
-        COPY app.py alto_utils.py download_utils.py image_utils.py metadata_utils.py  ./
+        COPY app.py alto_utils.py download_utils.py image_utils.py metadata_utils.py favicon.svg ./
+        COPY .streamlit ./.streamlit
 
         # Warm up caches
         RUN python -c 'import streamlit, requests, pandas, matplotlib'
