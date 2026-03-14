@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DH-LAB | ALTO-visning</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --aubergine: #40263E;
+            --sort: #1A1A1A;
+            --hvit: #FFFFFF;
+            --lys-gra: #F5F5F5;
+            --kant: #E0E0E0;
+            --sans: 'IBM Plex Sans', system-ui, sans-serif;
+            --mono: 'IBM Plex Mono', ui-monospace, monospace;
+            --sidebar-width: 280px;
+        }
+
+        body {
+            font-family: var(--sans);
+            color: var(--sort);
+            background: var(--hvit);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ── Sidebar ── */
+        #sidebar {
+            width: var(--sidebar-width);
+            min-height: 100vh;
+            background: var(--lys-gra);
+            border-right: 1px solid var(--kant);
+            padding: 1.5rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .dhlab-logo {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid var(--kant);
+        }
+        .dhlab-logo img { display: block; height: 32px; margin-bottom: 0.5rem; }
+        .dhlab-logo .name { font-weight: 600; font-size: 15px; line-height: 1.3; }
+        .dhlab-logo .sub  { font-size: 12px; color: #1A1A1A99; line-height: 1.3; }
+
+        .control-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .control-group > label { font-size: 13px; font-weight: 600; }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 0.5rem 0.6rem;
+            border: 1px solid var(--kant);
+            border-radius: 4px;
+            font-family: var(--sans);
+            font-size: 13px;
+            background: var(--hvit);
+            color: var(--sort);
+        }
+        input[type="text"]:focus { outline: 2px solid var(--aubergine); border-color: transparent; }
+
+        .page-nav { display: flex; gap: 6px; align-items: center; }
+        .page-nav button {
+            background: var(--aubergine);
+            color: var(--hvit);
+            border: none;
+            border-radius: 4px;
+            width: 32px; height: 32px;
+            font-size: 14px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .page-nav button:disabled { background: var(--kant); color: #1A1A1A66; cursor: default; }
+        .page-nav button:not(:disabled):hover { background: var(--sort); }
+        .page-nav select {
+            flex: 1;
+            padding: 0.4rem 0.5rem;
+            border: 1px solid var(--kant);
+            border-radius: 4px;
+            font-family: var(--sans);
+            font-size: 13px;
+            background: var(--hvit);
+            color: var(--sort);
+        }
+        .page-nav select:focus { outline: 2px solid var(--aubergine); }
+
+        .radio-group { display: flex; flex-direction: column; gap: 0.35rem; }
+        .radio-group label { display: flex; align-items: center; gap: 0.5rem; font-weight: 400; font-size: 14px; cursor: pointer; }
+        input[type="radio"] { accent-color: var(--aubergine); }
+
+        details {
+            border: 1px solid var(--kant);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        details summary {
+            padding: 0.6rem 0.75rem;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--aubergine);
+            cursor: pointer;
+            user-select: none;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        details summary::-webkit-details-marker { display: none; }
+        details summary::before { content: '▶'; font-size: 10px; transition: transform 0.15s; }
+        details[open] summary::before { transform: rotate(90deg); }
+
+        .details-body {
+            padding: 0.75rem;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            background: var(--hvit);
+        }
+        .details-body a { color: var(--aubergine); }
+        .details-body a:hover { color: var(--sort); }
+
+        .btn-download {
+            display: block;
+            background: var(--aubergine);
+            color: var(--hvit) !important;
+            text-decoration: none;
+            padding: 0.45rem 0.75rem;
+            border-radius: 4px;
+            font-size: 13px;
+            text-align: center;
+            cursor: pointer;
+        }
+        .btn-download:hover { background: var(--sort) !important; color: var(--hvit) !important; }
+        .btn-download:disabled { background: var(--kant); color: #1A1A1A66 !important; cursor: default; }
+
+        /* Fremdriftsbar for fulldokument-nedlasting */
+        #dl-progress {
+            display: none;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        #dl-progress.active { display: flex; }
+        #dl-progress-label { font-size: 12px; color: #1A1A1A99; }
+        #dl-progress-track {
+            height: 6px;
+            background: var(--kant);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        #dl-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--aubergine);
+            border-radius: 3px;
+            transition: width 0.2s ease;
+        }
+
+        /* ── Main content ── */
+        #content {
+            flex: 1;
+            padding: 2rem 2.5rem;
+            max-width: 900px;
+        }
+
+        h1 {
+            font-family: var(--mono);
+            font-weight: 700;
+            font-size: 2rem;
+            color: var(--aubergine);
+            margin-bottom: 0.4rem;
+        }
+        .subtitle { font-size: 15px; color: #1A1A1A99; margin-bottom: 2rem; }
+
+        .spinner {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 14px;
+            color: #1A1A1A99;
+            padding: 1rem 0;
+        }
+        .spinner.active { display: flex; }
+        .spinner-dot {
+            width: 8px; height: 8px;
+            background: var(--aubergine);
+            border-radius: 50%;
+            animation: bounce 0.8s infinite alternate;
+        }
+        .spinner-dot:nth-child(2) { animation-delay: 0.2s; }
+        .spinner-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce {
+            from { opacity: 0.3; transform: scale(0.8); }
+            to   { opacity: 1;   transform: scale(1.1); }
+        }
+
+        #page-image { max-width: 100%; display: none; margin-bottom: 1.5rem; }
+
+        #text-area-wrap { display: none; margin-top: 1rem; }
+        #text-area-wrap h2 { font-family: var(--mono); font-size: 1rem; margin-bottom: 0.5rem; }
+        textarea {
+            width: 100%;
+            height: 280px;
+            padding: 0.75rem;
+            border: 1px solid var(--kant);
+            border-radius: 4px;
+            font-family: var(--mono);
+            font-size: 12px;
+            resize: vertical;
+            background: var(--lys-gra);
+            color: var(--sort);
+        }
+
+        .meta-row { font-size: 13px; }
+        .msg-info  { font-size: 13px; color: #1A1A1A99; padding: 0.5rem 0; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<aside id="sidebar">
+    <a class="dhlab-logo" href="https://dh.nb.no" target="_blank">
+        <img src="/static/favicon.svg" alt="DH-LAB logo">
+        <div class="name">DH-LAB</div>
+        <div class="sub">Nasjonalbiblioteket</div>
+    </a>
+
+    <div class="control-group">
+        <label for="urn-input">Lim inn URN eller lenke til dokument</label>
+        <input type="text" id="urn-input"
+               placeholder="URN:NBN:no-nb_digibok_..."
+               value="URN:NBN:no-nb_digibok_2016040508078">
+    </div>
+
+    <div id="nav-section" class="hidden">
+        <div class="control-group" style="margin-bottom: 0.75rem;">
+            <label>Velg side</label>
+            <div class="page-nav">
+                <button id="btn-prev" disabled title="Forrige side">◀</button>
+                <select id="page-select"></select>
+                <button id="btn-next" title="Neste side">▶</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Vis</label>
+            <div class="radio-group">
+                <label><input type="radio" name="view" value="tekstblokker" checked> Tekstblokker</label>
+                <label><input type="radio" name="view" value="tekstlinjer"> Tekstlinjer</label>
+                <label><input type="radio" name="view" value="ord"> Ord</label>
+            </div>
+        </div>
+    </div>
+
+    <div id="sidebar-details" class="hidden" style="display:flex;flex-direction:column;gap:0.5rem;">
+        <details>
+            <summary>Vis metadata</summary>
+            <div class="details-body" id="meta-body"></div>
+        </details>
+        <details>
+            <summary>OCR-informasjon</summary>
+            <div class="details-body" id="ocr-body"></div>
+        </details>
+        <details>
+            <summary>Lenker for denne siden</summary>
+            <div class="details-body">
+                <a id="link-image" href="#" target="_blank">Bilde (IIIF)</a>
+                <a id="link-alto"  href="#" target="_blank">ALTO XML</a>
+            </div>
+        </details>
+        <details>
+            <summary>Nedlastinger</summary>
+            <div class="details-body">
+                <a id="dl-page" class="btn-download" href="#">📥 Last ned denne siden (.txt)</a>
+                <button id="dl-full" class="btn-download">📘 Last ned hele dokumentet (.txt)</button>
+                <div id="dl-progress">
+                    <div id="dl-progress-label">Henter side 0 av 0…</div>
+                    <div id="dl-progress-track"><div id="dl-progress-bar"></div></div>
+                </div>
+            </div>
+        </details>
+    </div>
+</aside>
+
+<main id="content">
+    <h1>ALTO-visning</h1>
+    <p class="subtitle">Visualiser layout og hent ut tekst fra dokumenter på nb.no.</p>
+
+    <div class="spinner" id="spinner">
+        <span class="spinner-dot"></span>
+        <span class="spinner-dot"></span>
+        <span class="spinner-dot"></span>
+        Henter side…
+    </div>
+
+    <img id="page-image" alt="Sidevisning med ALTO-overlay">
+    <p id="no-image-msg" class="msg-info hidden">Ingen bilde tilgjengelig for denne siden.</p>
+
+    <div id="text-area-wrap">
+        <h2>Transkribert tekst</h2>
+        <textarea id="transcript" readonly></textarea>
+    </div>
+    <p id="no-text-msg" class="msg-info hidden">Ingen transkribert tekst tilgjengelig for denne siden.</p>
+</main>
+
+<script>
+    let urn = null;
+    let pages = [];
+    let currentIndex = 0;
+
+    const urnInput     = document.getElementById('urn-input');
+    const navSection   = document.getElementById('nav-section');
+    const sidebarDets  = document.getElementById('sidebar-details');
+    const pageSelect   = document.getElementById('page-select');
+    const btnPrev      = document.getElementById('btn-prev');
+    const btnNext      = document.getElementById('btn-next');
+    const spinner      = document.getElementById('spinner');
+    const pageImage    = document.getElementById('page-image');
+    const noImageMsg   = document.getElementById('no-image-msg');
+    const textAreaWrap = document.getElementById('text-area-wrap');
+    const transcript   = document.getElementById('transcript');
+    const noTextMsg    = document.getElementById('no-text-msg');
+    const metaBody     = document.getElementById('meta-body');
+    const ocrBody      = document.getElementById('ocr-body');
+    const linkImage    = document.getElementById('link-image');
+    const linkAlto     = document.getElementById('link-alto');
+    const dlPage       = document.getElementById('dl-page');
+    const dlFull       = document.getElementById('dl-full');
+    const dlProgress   = document.getElementById('dl-progress');
+    const dlProgressBar   = document.getElementById('dl-progress-bar');
+    const dlProgressLabel = document.getElementById('dl-progress-label');
+
+    // Input: debounce 600 ms
+    let debounceTimer;
+    urnInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchPages(urnInput.value.trim()), 600);
+    });
+
+    document.querySelectorAll('input[name="view"]').forEach(r =>
+        r.addEventListener('change', () => renderPage())
+    );
+
+    pageSelect.addEventListener('change', () => {
+        currentIndex = pageSelect.selectedIndex;
+        updateNav();
+        renderPage();
+    });
+
+    btnPrev.addEventListener('click', () => {
+        if (currentIndex > 0) {
+            currentIndex--;
+            pageSelect.selectedIndex = currentIndex;
+            updateNav();
+            renderPage();
+        }
+    });
+
+    btnNext.addEventListener('click', () => {
+        if (currentIndex < pages.length - 1) {
+            currentIndex++;
+            pageSelect.selectedIndex = currentIndex;
+            updateNav();
+            renderPage();
+        }
+    });
+
+    async function fetchPages(input) {
+        if (!input) return;
+        try {
+            const res = await fetch(`/api/pages?input=${encodeURIComponent(input)}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            urn = data.urn;
+            pages = data.pages;
+            currentIndex = 0;
+            pageSelect.innerHTML = '';
+            pages.forEach((p, i) => {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = p.label;
+                pageSelect.appendChild(opt);
+            });
+            navSection.classList.remove('hidden');
+            updateNav();
+            renderPage();
+        } catch (e) {
+            console.error('fetchPages:', e);
+        }
+    }
+
+    function updateNav() {
+        btnPrev.disabled = currentIndex <= 0;
+        btnNext.disabled = currentIndex >= pages.length - 1;
+    }
+
+    async function renderPage() {
+        if (!urn || pages.length === 0) return;
+        const page = pages[currentIndex];
+        const view = document.querySelector('input[name="view"]:checked').value;
+
+        spinner.classList.add('active');
+        pageImage.style.display = 'none';
+        noImageMsg.classList.add('hidden');
+        textAreaWrap.style.display = 'none';
+        noTextMsg.classList.add('hidden');
+
+        try {
+            const res = await fetch(
+                `/api/render?urn=${encodeURIComponent(urn)}&page_id=${encodeURIComponent(page.page_id)}&view=${view}`
+            );
+            const data = await res.json();
+
+            // Bilde
+            if (data.image_b64) {
+                pageImage.src = 'data:image/png;base64,' + data.image_b64;
+                pageImage.style.display = 'block';
+            } else {
+                noImageMsg.classList.remove('hidden');
+            }
+
+            // Tekst
+            if (data.full_text && data.full_text.trim()) {
+                transcript.value = data.full_text;
+                textAreaWrap.style.display = 'block';
+            } else {
+                noTextMsg.classList.remove('hidden');
+            }
+
+            // Metadata
+            if (data.metadata) {
+                const m = data.metadata;
+                metaBody.innerHTML = [
+                    m.title ? `<div class="meta-row"><strong>Tittel:</strong> ${m.title}</div>` : '',
+                    m.year  ? `<div class="meta-row"><strong>År:</strong> ${m.year}</div>` : '',
+                    `<div class="meta-row"><strong>URN:</strong> <a href="https://www.nb.no/items/${urn}" target="_blank">nb.no/items/${urn}</a></div>`,
+                ].join('');
+            }
+
+            // OCR
+            if (data.ocr_info && data.ocr_info.length) {
+                ocrBody.innerHTML = data.ocr_info
+                    .map(l => `<div class="meta-row">${l.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</div>`)
+                    .join('');
+                if (data.avg_wc != null) {
+                    ocrBody.innerHTML += `<div class="meta-row"><strong>Word Confidence:</strong> ${data.avg_wc}</div>`;
+                }
+            } else {
+                ocrBody.innerHTML = '<div class="msg-info">Ingen OCR-informasjon tilgjengelig.</div>';
+            }
+
+            // Lenker
+            if (data.links) {
+                linkImage.href = data.links.image;
+                linkAlto.href  = data.links.alto;
+            }
+
+            // Nedlasting enkeltside
+            dlPage.href = `/api/download/page?urn=${encodeURIComponent(urn)}&page_id=${encodeURIComponent(page.page_id)}`;
+
+            sidebarDets.classList.remove('hidden');
+            sidebarDets.style.display = 'flex';
+
+        } catch (e) {
+            console.error('renderPage:', e);
+        } finally {
+            spinner.classList.remove('active');
+        }
+    }
+
+    // Fulldokument-nedlasting med SSE-fremdrift
+    dlFull.addEventListener('click', () => {
+        if (!urn || pages.length === 0) return;
+        const pageIds = pages.map(p => p.page_id).join(',');
+        const url = `/api/download/full/progress?urn=${encodeURIComponent(urn)}&page_ids=${encodeURIComponent(pageIds)}`;
+
+        dlFull.disabled = true;
+        dlProgress.classList.add('active');
+        dlProgressBar.style.width = '0%';
+        dlProgressLabel.textContent = `Henter side 0 av ${pages.length}…`;
+
+        const source = new EventSource(url);
+        source.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            const pct = Math.round((data.current / data.total) * 100);
+            dlProgressBar.style.width = pct + '%';
+            dlProgressLabel.textContent = data.done
+                ? 'Ferdig!'
+                : `Henter side ${data.current} av ${data.total}…`;
+
+            if (data.done) {
+                source.close();
+                // Trigger nedlasting via Blob
+                const blob = new Blob([data.text], { type: 'text/plain' });
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = `${urn}_FULLTEKST.txt`;
+                a.click();
+                URL.revokeObjectURL(blobUrl);
+                setTimeout(() => {
+                    dlFull.disabled = false;
+                    dlProgress.classList.remove('active');
+                }, 1500);
+            }
+        };
+        source.onerror = () => {
+            source.close();
+            dlFull.disabled = false;
+            dlProgress.classList.remove('active');
+            dlProgressLabel.textContent = 'Noe gikk galt. Prøv igjen.';
+        };
+    });
+
+    // Last inn standard URN ved oppstart
+    fetchPages(urnInput.value.trim());
+</script>
+</body>
+</html>

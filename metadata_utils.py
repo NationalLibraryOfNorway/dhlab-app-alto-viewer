@@ -1,23 +1,25 @@
-# metadata_utils: fetch_iiif_manifest, get_page_list, show_metadata, extract_urn_or_lookup
-import requests
-import re
-import streamlit as st
+# metadata_utils: fetch_iiif_manifest, get_page_list, get_metadata, extract_urn_or_lookup
+from functools import lru_cache
 import json
+import re
 
-@st.cache_data(show_spinner=False)
+import requests
+
+
+@lru_cache(maxsize=128)
 def fetch_iiif_manifest(urn):
     url = f"https://api.nb.no/catalog/v1/iiif/{urn}/manifest"
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json()
-        st.error(f"Kunne ikke hente IIIF-manifestet. Status: {response.status_code}")
-    except requests.RequestException as e:
-        st.error(f"Nettverksfeil ved henting av manifest: {e}")
+    except requests.RequestException:
+        pass
     return None
 
+
 def get_page_list(manifest):
-    """Returns (labels, page_ids) where page_ids are extracted from the IIIF canvas IDs."""
+    """Returns (labels, page_ids) where page_ids are extracted from IIIF canvas IDs."""
     if not manifest:
         return [], []
     try:
@@ -28,7 +30,8 @@ def get_page_list(manifest):
     except (KeyError, IndexError):
         return [], []
 
-@st.cache_data(show_spinner=False)
+
+@lru_cache(maxsize=128)
 def _fetch_metadata(urn):
     url = f"https://api.nb.no/catalog/v1/items/{urn}"
     try:
@@ -39,23 +42,22 @@ def _fetch_metadata(urn):
         pass
     return None
 
-def show_metadata(urn):
+
+def get_metadata(urn):
+    """Returns dict with title, year, urn — or None if unavailable."""
     data = _fetch_metadata(urn)
     if data is None:
-        return
+        return None
     flat_json = json.dumps(data, ensure_ascii=False)
-
     title_match = re.search(r'"title"\s*:\s*"([^"]+?)"', flat_json)
     issued_match = re.search(r'"issued"\s*:\s*"(\d{4})"', flat_json)
+    return {
+        "title": title_match.group(1) if title_match else None,
+        "year":  issued_match.group(1) if issued_match else None,
+        "urn":   urn,
+    }
 
-    title = title_match.group(1) if title_match else None
-    year = issued_match.group(1) if issued_match else None
 
-    with st.sidebar.expander("Vis metadata"):
-        st.markdown(f"**Tittel:** {title}")
-        st.markdown(f"**År:** {year}")
-        st.markdown(f"**URN:** [nb.no/items/{urn}](https://www.nb.no/items/{urn})")
-        
 def extract_urn_or_lookup(input_str):
     urn_match = re.search(r"URN:NBN:[^\s/?]+", input_str)
     if urn_match:
@@ -68,14 +70,13 @@ def extract_urn_or_lookup(input_str):
         try:
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
-                data = response.json()
-                flat_json = json.dumps(data)
+                flat_json = json.dumps(response.json())
                 urn_fallback = re.search(r"URN:NBN:[^\s\",]+", flat_json)
                 if urn_fallback:
                     urn_cleaned = re.sub(r"_[^_]+/full/.*", "", urn_fallback.group(0))
                     urn_cleaned = re.sub(r"-\d+_\d+$", "", urn_cleaned)
                     return urn_cleaned
         except requests.RequestException:
-            st.error("Nettverksfeil ved oppslag av dokument-ID.")
+            pass
 
     return None

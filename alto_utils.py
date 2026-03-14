@@ -1,6 +1,6 @@
-#alto_utils: parse_alto, extract_ocr_info, extract_avg_wc
+# alto_utils: parse_alto, extract_ocr_info, extract_avg_wc
 import xml.etree.ElementTree as ET
-import streamlit as st  
+
 
 def parse_alto(alto_xml):
     if not alto_xml:
@@ -8,26 +8,22 @@ def parse_alto(alto_xml):
     try:
         root = ET.fromstring(alto_xml)
     except ET.ParseError:
-        st.error("Feil: Kunne ikke lese ALTO XML (ugyldig format)")
         return None, None, [], [], [], ""
 
     ns = {"alto": root.tag.split("}")[0].strip("{")} if "}" in root.tag else {"alto": ""}
 
     layout = root.find("alto:Layout", ns)
     if layout is None:
-        st.error("Feil: Layout-element ikke funnet i ALTO XML")
         return None, None, [], [], [], ""
 
     page = layout.find("alto:Page", ns)
     if page is None:
-        st.error("Feil: Page-element ikke funnet i ALTO XML")
         return None, None, [], [], [], ""
 
     try:
         width = int(page.attrib['WIDTH'])
         height = int(page.attrib['HEIGHT'])
     except (KeyError, ValueError):
-        st.error("Feil: Manglende eller ugyldig WIDTH/HEIGHT på Page-element")
         return None, None, [], [], [], ""
 
     # Noen ALTO-filer (f.eks. fra NB.no) har inkonsistente koordinatsystem der
@@ -56,7 +52,7 @@ def parse_alto(alto_xml):
     words = []
     full_text = ""
 
-    block_id = 1  # Felles løpenummer for blokker uansett hvor de ligger
+    block_id = 1
 
     for area_tag, label in [("PrintSpace", "PrintSpace"), ("TopMargin", "TopMargin"), ("BottomMargin", "BottomMargin")]:
         area = page.find(f"alto:{area_tag}", ns)
@@ -100,6 +96,7 @@ def parse_alto(alto_xml):
 
     return width, height, text_blocks, lines, words, full_text.strip()
 
+
 def extract_ocr_info(alto_xml):
     if not alto_xml:
         return []
@@ -109,31 +106,22 @@ def extract_ocr_info(alto_xml):
         return []
     info = []
 
-    # Finn <Description>
     description = next((child for child in root if child.tag.endswith("Description")), None)
     if description is None:
         return []
 
-    # Gå gjennom alle <OCRProcessing>-blokker
     for ocr_proc in description:
         if not ocr_proc.tag.endswith("OCRProcessing"):
             continue
-
         for step in ocr_proc:
             if not step.tag.lower().endswith("step"):
                 continue
-
             label = "OCR-prosessering" if "ocr" in step.tag.lower() else "Preprosessering:"
-
-            # Gå gjennom alle barna og let etter processingSoftware manuelt
             for child in step:
                 if child.tag.endswith("processingSoftware"):
-                    name = None
-                    creator = None
-                    version = None
-
+                    name = creator = version = None
                     for element in child:
-                        tag = element.tag.split("}")[-1]  # fjern namespace
+                        tag = element.tag.split("}")[-1]
                         text = element.text.strip() if element.text else ""
                         if tag == "softwareName":
                             name = text
@@ -141,17 +129,15 @@ def extract_ocr_info(alto_xml):
                             creator = text
                         elif tag == "softwareVersion":
                             version = text
-
                     parts = [f"**{label}**: {name or '(ukjent)'}"]
                     if version:
                         parts.append(f"versjon {version}")
                     if creator:
                         parts.append(f"({creator})")
-
                     info.append(" ".join(parts))
-                    break  # slutt etter første processingSoftware
-
+                    break
     return info
+
 
 def extract_avg_wc(alto_xml):
     if not alto_xml:
