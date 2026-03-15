@@ -1,7 +1,10 @@
 import json
+import re
 
 import requests
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from alto_utils import parse_alto, extract_avg_wc, extract_ocr_info
 from image_utils import fetch_image, plot_alto
@@ -9,6 +12,25 @@ from download_utils import fetch_alto
 from metadata_utils import fetch_iiif_manifest, get_page_list, get_metadata, extract_urn_or_lookup
 
 app = Flask(__name__)
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["60 per minute"],
+    storage_uri="memory://",
+)
+
+# Valideringsmønstre
+_URN_RE     = re.compile(r'^URN:NBN:no-nb_[A-Za-z0-9_\-]+$', re.IGNORECASE)
+_PAGE_ID_RE = re.compile(r'^[A-Za-z0-9:_\-]+$')
+
+
+def _valid_urn(s):
+    return bool(_URN_RE.match(s))
+
+
+def _valid_page_id(s):
+    return bool(_PAGE_ID_RE.match(s))
 
 
 @app.route('/')
@@ -25,6 +47,9 @@ def api_pages():
     urn = extract_urn_or_lookup(input_str)
     if not urn:
         return jsonify({'error': 'Ugyldig URN eller lenke'}), 400
+
+    if not _valid_urn(urn):
+        return jsonify({'error': 'Ugyldig URN-format'}), 400
 
     manifest = fetch_iiif_manifest(urn)
     if not manifest:
@@ -46,6 +71,12 @@ def api_render():
 
     if not urn or not page_id:
         return jsonify({'error': 'Mangler urn eller page_id'}), 400
+
+    if not _valid_urn(urn):
+        return jsonify({'error': 'Ugyldig URN-format'}), 400
+
+    if not _valid_page_id(page_id):
+        return jsonify({'error': 'Ugyldig side-ID'}), 400
 
     alto_xml = fetch_alto(urn, page_id)
     image    = fetch_image(page_id)
@@ -80,6 +111,13 @@ def api_render():
 def download_page():
     urn     = request.args.get('urn', '').strip()
     page_id = request.args.get('page_id', '').strip()
+
+    if not _valid_urn(urn):
+        return jsonify({'error': 'Ugyldig URN-format'}), 400
+
+    if not _valid_page_id(page_id):
+        return jsonify({'error': 'Ugyldig side-ID'}), 400
+
     alto_xml = fetch_alto(urn, page_id)
     _, _, _, _, _, full_text = parse_alto(alto_xml)
     return Response(
@@ -90,11 +128,16 @@ def download_page():
 
 
 @app.route('/api/download/full/progress')
+@limiter.limit("5 per hour")
 def download_full_progress():
     urn          = request.args.get('urn', '').strip()
     page_ids_str = request.args.get('page_ids', '').strip()
-    page_ids     = [p for p in page_ids_str.split(',') if p]
-    total        = len(page_ids)
+
+    if not _valid_urn(urn):
+        return jsonify({'error': 'Ugyldig URN-format'}), 400
+
+    page_ids = [p for p in page_ids_str.split(',') if p and _valid_page_id(p)]
+    total    = len(page_ids)
 
     def generate():
         full_text = ""
