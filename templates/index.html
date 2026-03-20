@@ -381,7 +381,7 @@
     async function fetchPages(input) {
         if (!input) return;
         try {
-            const res = await fetch(`/api/pages?input=${encodeURIComponent(input)}`);
+            const res = await fetch(`/alto-viewer/api/pages?input=${encodeURIComponent(input)}`);
             if (!res.ok) return;
             const data = await res.json();
             urn = data.urn;
@@ -420,7 +420,7 @@
 
         try {
             const res = await fetch(
-                `/api/render?urn=${encodeURIComponent(urn)}&page_id=${encodeURIComponent(page.page_id)}&view=${view}`
+                `/alto-viewer/api/render?urn=${encodeURIComponent(urn)}&page_id=${encodeURIComponent(page.page_id)}&view=${view}`
             );
             const data = await res.json();
 
@@ -469,7 +469,7 @@
             }
 
             // Nedlasting enkeltside
-            dlPage.href = `/api/download/page?urn=${encodeURIComponent(urn)}&page_id=${encodeURIComponent(page.page_id)}`;
+            dlPage.href = `/alto-viewer/api/download/page?urn=${encodeURIComponent(urn)}&page_id=${encodeURIComponent(page.page_id)}`;
 
             sidebarDets.classList.remove('hidden');
             sidebarDets.style.display = 'flex';
@@ -485,7 +485,7 @@
     dlFull.addEventListener('click', () => {
         if (!urn || pages.length === 0) return;
         const pageIds = pages.map(p => p.page_id).join(',');
-        const url = `/api/download/full/progress?urn=${encodeURIComponent(urn)}&page_ids=${encodeURIComponent(pageIds)}`;
+        const url = `/alto-viewer/api/download/full/progress?urn=${encodeURIComponent(urn)}&page_ids=${encodeURIComponent(pageIds)}`;
 
         dlFull.disabled = true;
         dlProgress.classList.add('active');

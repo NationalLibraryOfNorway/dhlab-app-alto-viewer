@@ -2,7 +2,7 @@ import json
 import re
 
 import requests
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask import Flask, Blueprint, render_template, request, jsonify, Response, stream_with_context
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -20,6 +20,8 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
+bp = Blueprint('alto_viewer', __name__)
+
 # Valideringsmønstre
 _URN_RE     = re.compile(r'^URN:NBN:no-nb_[A-Za-z0-9_\-]+$', re.IGNORECASE)
 _PAGE_ID_RE = re.compile(r'^[A-Za-z0-9:_\-]+$')
@@ -33,12 +35,12 @@ def _valid_page_id(s):
     return bool(_PAGE_ID_RE.match(s))
 
 
-@app.route('/')
+@bp.route('/')
 def index():
     return render_template('index.html')
 
 
-@app.route('/api/pages')
+@bp.route('/api/pages')
 def api_pages():
     input_str = request.args.get('input', '').strip()
     if not input_str:
@@ -63,7 +65,7 @@ def api_pages():
     return jsonify({'urn': urn, 'pages': pages})
 
 
-@app.route('/api/render')
+@bp.route('/api/render')
 def api_render():
     urn     = request.args.get('urn', '').strip()
     page_id = request.args.get('page_id', '').strip()
@@ -107,7 +109,7 @@ def api_render():
     })
 
 
-@app.route('/api/download/page')
+@bp.route('/api/download/page')
 def download_page():
     urn     = request.args.get('urn', '').strip()
     page_id = request.args.get('page_id', '').strip()
@@ -127,7 +129,7 @@ def download_page():
     )
 
 
-@app.route('/api/download/full/progress')
+@bp.route('/api/download/full/progress')
 @limiter.limit("5 per hour")
 def download_full_progress():
     urn          = request.args.get('urn', '').strip()
@@ -164,6 +166,8 @@ def download_full_progress():
         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
     )
 
+
+app.register_blueprint(bp, url_prefix='/alto-viewer')
 
 if __name__ == '__main__':
     app.run(debug=True)
