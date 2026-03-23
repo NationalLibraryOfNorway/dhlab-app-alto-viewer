@@ -1,4 +1,5 @@
 import json
+import os
 import re
 
 import requests
@@ -12,6 +13,9 @@ from download_utils import fetch_alto
 from metadata_utils import fetch_iiif_manifest, get_page_list, get_metadata, extract_urn_or_lookup
 
 app = Flask(__name__)
+
+# APP_ROOT settes som miljøvariabel på serveren, f.eks. '/run/alto-viewer/app'
+APP_ROOT = os.environ.get('APP_ROOT', '')
 
 limiter = Limiter(
     get_remote_address,
@@ -37,7 +41,7 @@ def _valid_page_id(s):
 
 @bp.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', app_root=APP_ROOT)
 
 
 @bp.route('/api/pages')
