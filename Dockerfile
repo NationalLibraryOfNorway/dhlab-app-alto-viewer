@@ -14,4 +14,7 @@ COPY static ./static
 # Warm up caches
 RUN python -c 'import flask, requests, matplotlib, PIL'
 
+# set APP_ROOT
+ENV APP_ROOT=/run/alto-viewer/app
+
 CMD gunicorn --bind 0.0.0.0:${PORT} --workers 2 --timeout 120 app:app
