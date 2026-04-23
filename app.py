@@ -7,8 +7,8 @@ from flask import Flask, Blueprint, render_template, request, jsonify, Response,
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from alto_utils import parse_alto, extract_avg_wc, extract_ocr_info
-from image_utils import fetch_image, plot_alto
+from alto_utils import parse_alto, extract_avg_wc, extract_ocr_info, extract_image_url
+from image_utils import fetch_image, plot_alto, fetch_image_from_url
 from download_utils import fetch_alto
 from metadata_utils import fetch_iiif_manifest, get_page_list, get_metadata, extract_urn_or_lookup
 
@@ -169,6 +169,50 @@ def download_full_progress():
         mimetype='text/event-stream',
         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
     )
+
+
+@bp.route('/api/local/render', methods=['POST'])
+def local_render():
+    if 'file' not in request.files:
+        return jsonify({'error': 'Ingen fil lastet opp'}), 400
+
+    f = request.files['file']
+    if not f.filename.lower().endswith('.xml'):
+        return jsonify({'error': 'Kun XML-filer støttes'}), 400
+
+    content = f.read()
+    if len(content) > 5_000_000:
+        return jsonify({'error': 'Filen er for stor (maks 5 MB)'}), 413
+
+    try:
+        alto_xml = content.decode('utf-8')
+    except UnicodeDecodeError:
+        alto_xml = content.decode('latin-1', errors='replace')
+
+    view = request.form.get('view', 'tekstblokker').strip()
+
+    image_url = extract_image_url(alto_xml)
+    image     = fetch_image_from_url(image_url) if image_url else None
+
+    width, height, text_blocks, lines, words, full_text = parse_alto(alto_xml)
+    avg_wc   = extract_avg_wc(alto_xml)
+    ocr_info = extract_ocr_info(alto_xml)
+
+    view_map = {
+        'tekstblokker': (text_blocks, 'red',   True),
+        'tekstlinjer':  (lines,       'blue',  False),
+        'ord':          (words,       'green', False),
+    }
+    elements, color, show_numbers = view_map.get(view, (text_blocks, 'red', True))
+    image_b64 = plot_alto(image, width, height, elements, color=color, show_numbers=show_numbers)
+
+    return jsonify({
+        'image_b64': image_b64,
+        'full_text': full_text,
+        'ocr_info':  ocr_info,
+        'avg_wc':    avg_wc,
+        'image_url': image_url,
+    })
 
 
 app.register_blueprint(bp, url_prefix='/alto-viewer')

@@ -139,6 +139,23 @@ def extract_ocr_info(alto_xml):
     return info
 
 
+def extract_image_url(alto_xml):
+    """Hent bilde-URL fra <sourceImageInformation><fileName> i ALTO-XML."""
+    if not alto_xml:
+        return None
+    try:
+        root = ET.fromstring(alto_xml)
+    except ET.ParseError:
+        return None
+    for elem in root.iter():
+        tag = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
+        if tag == 'fileName' and elem.text:
+            url = elem.text.strip()
+            if url.startswith('http'):
+                return url
+    return None
+
+
 def extract_avg_wc(alto_xml):
     if not alto_xml:
         return None

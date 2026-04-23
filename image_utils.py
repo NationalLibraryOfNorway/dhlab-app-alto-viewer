@@ -11,6 +11,24 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 
+def fetch_image_from_url(url):
+    """Hent bilde fra vilkårlig URL. Skalerer IIIF-bilder ned til 50 % for visning."""
+    if not url:
+        return None
+    import re
+    display_url = url
+    m = re.search(r'/pct:(\d+)/', url)
+    if m and int(m.group(1)) > 60:
+        display_url = re.sub(r'/pct:\d+/', '/pct:50/', url)
+    try:
+        response = requests.get(display_url, timeout=15)
+        if response.status_code == 200:
+            return Image.open(io.BytesIO(response.content))
+    except requests.RequestException:
+        pass
+    return None
+
+
 @lru_cache(maxsize=64)
 def fetch_image(page_id, scale=0.5):
     url = f"https://www.nb.no/services/image/resolver/{page_id}/full/pct:{int(scale * 100)}/0/native.jpg"

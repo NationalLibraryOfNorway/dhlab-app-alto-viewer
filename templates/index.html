@@ -227,6 +227,22 @@
         .meta-row { font-size: 13px; }
         .msg-info  { font-size: 13px; color: #1A1A1A99; padding: 0.5rem 0; }
         .hidden { display: none !important; }
+
+        .mode-btn {
+            flex: 1;
+            padding: 0.4rem;
+            border: 1px solid var(--kant);
+            border-radius: 4px;
+            font-family: var(--sans);
+            font-size: 12px;
+            cursor: pointer;
+            background: var(--hvit);
+            color: var(--sort);
+            transition: background 0.1s;
+        }
+        .mode-btn.active { background: var(--aubergine); color: var(--hvit); border-color: var(--aubergine); }
+        input[type="file"] { font-family: var(--sans); font-size: 12px; width: 100%; }
+        .help-text { font-size: 11px; color: #1A1A1A99; margin-top: 0.25rem; }
     </style>
 </head>
 <body>
@@ -239,10 +255,24 @@
     </a>
 
     <div class="control-group">
+        <label>Kilde</label>
+        <div style="display:flex;gap:6px;">
+            <button id="btn-mode-urn" class="mode-btn active">URN / lenke</button>
+            <button id="btn-mode-local" class="mode-btn">Lokal mappe</button>
+        </div>
+    </div>
+
+    <div id="urn-section" class="control-group">
         <label for="urn-input">Lim inn URN eller lenke til dokument</label>
         <input type="text" id="urn-input"
                placeholder="URN:NBN:no-nb_digibok_..."
                value="URN:NBN:no-nb_digibok_2016040508078">
+    </div>
+
+    <div id="local-section" class="control-group hidden">
+        <label for="file-input">Velg ALTO XML-filer</label>
+        <input type="file" id="file-input" multiple accept=".xml">
+        <p class="help-text">Velg én eller flere XML-filer. Filene sorteres alfabetisk.</p>
     </div>
 
     <div id="nav-section" class="hidden">
@@ -322,6 +352,9 @@
     let urn = null;
     let pages = [];
     let currentIndex = 0;
+    let mode = 'urn';
+    let localFiles = [];
+    let lastRenderedText = '';
 
     const urnInput     = document.getElementById('urn-input');
     const navSection   = document.getElementById('nav-section');
@@ -344,6 +377,53 @@
     const dlProgress   = document.getElementById('dl-progress');
     const dlProgressBar   = document.getElementById('dl-progress-bar');
     const dlProgressLabel = document.getElementById('dl-progress-label');
+    const btnModeUrn   = document.getElementById('btn-mode-urn');
+    const btnModeLocal = document.getElementById('btn-mode-local');
+    const urnSection   = document.getElementById('urn-section');
+    const localSection = document.getElementById('local-section');
+    const fileInput    = document.getElementById('file-input');
+
+    // Modusbytte
+    function setMode(newMode) {
+        mode = newMode;
+        btnModeUrn.classList.toggle('active', mode === 'urn');
+        btnModeLocal.classList.toggle('active', mode === 'local');
+        urnSection.classList.toggle('hidden', mode === 'local');
+        localSection.classList.toggle('hidden', mode === 'urn');
+        urn = null; pages = []; localFiles = []; currentIndex = 0;
+        navSection.classList.add('hidden');
+        sidebarDets.classList.add('hidden');
+        sidebarDets.style.display = '';
+        pageImage.style.display = 'none';
+        textAreaWrap.style.display = 'none';
+        noImageMsg.classList.add('hidden');
+        noTextMsg.classList.add('hidden');
+        linkAlto.style.display = '';
+        dlFull.style.display = '';
+        dlPage.onclick = null;
+    }
+    btnModeUrn.addEventListener('click',   () => setMode('urn'));
+    btnModeLocal.addEventListener('click', () => setMode('local'));
+
+    // Fil-input (lokal modus)
+    fileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.xml'));
+        files.sort((a, b) => a.name.localeCompare(b.name));
+        localFiles = files;
+        if (files.length === 0) return;
+        pages = files.map(f => ({ label: f.name.replace(/\.xml$/i, ''), page_id: f.name }));
+        currentIndex = 0;
+        pageSelect.innerHTML = '';
+        pages.forEach((p, i) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = p.label;
+            pageSelect.appendChild(opt);
+        });
+        navSection.classList.remove('hidden');
+        updateNav();
+        renderPage();
+    });
 
     // Input: debounce 600 ms
     let debounceTimer;
@@ -410,6 +490,7 @@
     }
 
     async function renderPage() {
+        if (mode === 'local') { await renderLocalPage(); return; }
         if (!urn || pages.length === 0) return;
         const page = pages[currentIndex];
         const view = document.querySelector('input[name="view"]:checked').value;
@@ -478,6 +559,79 @@
 
         } catch (e) {
             console.error('renderPage:', e);
+        } finally {
+            spinner.classList.remove('active');
+        }
+    }
+
+    async function renderLocalPage() {
+        if (localFiles.length === 0) return;
+        const file = localFiles[currentIndex];
+        const view = document.querySelector('input[name="view"]:checked').value;
+
+        spinner.classList.add('active');
+        pageImage.style.display = 'none';
+        noImageMsg.classList.add('hidden');
+        textAreaWrap.style.display = 'none';
+        noTextMsg.classList.add('hidden');
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('view', view);
+
+            const res  = await fetch(`${APP_ROOT}/api/local/render`, { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (data.image_b64) {
+                pageImage.src = 'data:image/png;base64,' + data.image_b64;
+                pageImage.style.display = 'block';
+            } else {
+                noImageMsg.classList.remove('hidden');
+            }
+
+            if (data.full_text && data.full_text.trim()) {
+                lastRenderedText = data.full_text;
+                transcript.value = data.full_text;
+                textAreaWrap.style.display = 'block';
+            } else {
+                noTextMsg.classList.remove('hidden');
+            }
+
+            metaBody.innerHTML = `<div class="meta-row"><strong>Fil:</strong> ${file.name}</div>`;
+
+            if (data.ocr_info && data.ocr_info.length) {
+                ocrBody.innerHTML = data.ocr_info
+                    .map(l => `<div class="meta-row">${l.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</div>`)
+                    .join('');
+                if (data.avg_wc != null)
+                    ocrBody.innerHTML += `<div class="meta-row"><strong>Word Confidence:</strong> ${data.avg_wc}</div>`;
+            } else {
+                ocrBody.innerHTML = '<div class="msg-info">Ingen OCR-informasjon tilgjengelig.</div>';
+            }
+
+            linkImage.href = data.image_url || '#';
+            linkAlto.style.display = 'none';
+
+            // Last ned denne siden via Blob
+            dlPage.removeAttribute('href');
+            dlPage.onclick = (e) => {
+                e.preventDefault();
+                if (!lastRenderedText) return;
+                const blob    = new Blob([lastRenderedText], { type: 'text/plain' });
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = file.name.replace(/\.xml$/i, '.txt');
+                a.click();
+                URL.revokeObjectURL(blobUrl);
+            };
+            dlFull.style.display = 'none';
+
+            sidebarDets.classList.remove('hidden');
+            sidebarDets.style.display = 'flex';
+        } catch (e) {
+            console.error('renderLocalPage:', e);
         } finally {
             spinner.classList.remove('active');
         }
