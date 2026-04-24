@@ -156,6 +156,34 @@ def extract_image_url(alto_xml):
     return None
 
 
+def extract_doc_urn(image_url):
+    """Utled dokument-URN fra NB.no-bilde-URL ved å strippe sidespecifikke suffikser.
+
+    digavis-sider har suffikset  -{del}_{side}_{kvalifikator}  etter manifest-URN-en:
+      URN:NBN:no-nb_digavis_..._0_1_1  -1_001_null  ->  URN:NBN:no-nb_digavis_..._0_1_1
+    digibok-sider har suffikset  _C{n}:
+      URN:NBN:no-nb_digibok_2016040508078_C1          ->  URN:NBN:no-nb_digibok_2016040508078
+    """
+    if not image_url:
+        return None
+    import re
+    m = re.search(r'resolver/(URN:NBN:[^/]+)', image_url, re.IGNORECASE)
+    if not m:
+        return None
+    page_urn = m.group(1)
+    # digavis: strip  -{del}_{sidenr}_{kvalifikator}  (bindestrek + siffer + to segmenter)
+    doc = re.sub(r'-\d+(_\d{3,}_[^_]+)+$', '', page_urn)
+    if doc != page_urn:
+        return doc
+    # digibok: strip  _C1, _P2  osv. (bokstav + siffer)
+    doc = re.sub(r'_[A-Za-z]\d+$', '', page_urn)
+    if doc != page_urn:
+        return doc
+    # Siste utvei: strip siste segment
+    doc = re.sub(r'_[^_]+$', '', page_urn)
+    return doc if doc != page_urn else page_urn
+
+
 def extract_avg_wc(alto_xml):
     if not alto_xml:
         return None

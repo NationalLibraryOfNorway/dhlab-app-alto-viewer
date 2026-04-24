@@ -245,20 +245,29 @@
         .help-text { font-size: 11px; color: #1A1A1A99; margin-top: 0.25rem; }
 
         #wc-badge {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
             padding: 0.5rem 0.75rem;
             border: 1px solid var(--kant);
             border-radius: 4px;
             background: var(--hvit);
             font-size: 13px;
         }
+        #wc-single { display: flex; align-items: center; justify-content: space-between; }
+        #wc-split-row { display: flex; justify-content: space-between; margin-top: 0.3rem; font-size: 12px; }
+
+        #text-container { display: flex; gap: 1.5rem; }
+        #text-panel-left  { flex: 1; min-width: 0; }
+        #text-panel-right { flex: 1; min-width: 0; display: none; }
         .wc-score { font-weight: 700; font-size: 15px; }
         .wc-green  { color: #2a7a2a; }
         .wc-orange { color: #c07000; }
         .wc-red    { color: #c0392b; }
         .wc-na     { color: #1A1A1A99; font-weight: 400; font-size: 13px; }
+
+        #viewer-container { display: flex; gap: 1.5rem; align-items: flex-start; }
+        #panel-left  { flex: 1; min-width: 0; }
+        #panel-right { flex: 1; min-width: 0; display: none; }
+        #content.split-mode { max-width: none; }
+        .panel-label { font-size: 12px; font-weight: 600; color: #1A1A1A99; margin-bottom: 0.4rem; }
     </style>
 </head>
 <body>
@@ -275,6 +284,7 @@
         <div style="display:flex;gap:6px;">
             <button id="btn-mode-urn" class="mode-btn active">URN / lenke</button>
             <button id="btn-mode-local" class="mode-btn">Lokal mappe</button>
+            <button id="btn-mode-split" class="mode-btn">Splitt</button>
         </div>
     </div>
 
@@ -339,8 +349,15 @@
             </div>
         </details>
         <div id="wc-badge">
-            <span>Word Confidence</span>
-            <span id="wc-score" class="wc-score">–</span>
+            <div id="wc-single">
+                <span>Word Confidence</span>
+                <span id="wc-score" class="wc-score">–</span>
+            </div>
+            <div id="wc-split-row" style="display:none;">
+                <span style="font-size:12px;font-weight:600;">Word Confidence</span>
+                <span>Lokal: <span id="wc-score-local" class="wc-score" style="font-size:13px;">–</span></span>
+                <span>NB.no: <span id="wc-score-nb" class="wc-score" style="font-size:13px;">–</span></span>
+            </div>
         </div>
     </div>
 </aside>
@@ -356,12 +373,29 @@
         Henter side…
     </div>
 
-    <img id="page-image" alt="Sidevisning med ALTO-overlay">
-    <p id="no-image-msg" class="msg-info hidden">Ingen bilde tilgjengelig for denne siden.</p>
+    <div id="viewer-container">
+        <div id="panel-left">
+            <img id="page-image" alt="Sidevisning med ALTO-overlay">
+            <p id="no-image-msg" class="msg-info hidden">Ingen bilde tilgjengelig for denne siden.</p>
+        </div>
+        <div id="panel-right">
+            <p class="panel-label">NB.no – ALTO-overlay</p>
+            <p id="view-note" class="msg-info hidden"></p>
+            <img id="page-image-right" alt="NB.no ALTO-overlay" style="max-width:100%;">
+        </div>
+    </div>
 
     <div id="text-area-wrap">
-        <h2>Transkribert tekst</h2>
-        <textarea id="transcript" readonly></textarea>
+        <div id="text-container">
+            <div id="text-panel-left">
+                <h2>Transkribert tekst</h2>
+                <textarea id="transcript" readonly></textarea>
+            </div>
+            <div id="text-panel-right">
+                <h2>NB.no – tekst</h2>
+                <textarea id="transcript-right" readonly></textarea>
+            </div>
+        </div>
     </div>
     <p id="no-text-msg" class="msg-info hidden">Ingen transkribert tekst tilgjengelig for denne siden.</p>
 </main>
@@ -375,6 +409,7 @@
     let mode = 'urn';
     let localFiles = [];
     let lastRenderedText = '';
+    let nbPages = [];
 
     const urnInput     = document.getElementById('urn-input');
     const navSection   = document.getElementById('nav-section');
@@ -399,18 +434,35 @@
     const dlProgressLabel = document.getElementById('dl-progress-label');
     const btnModeUrn   = document.getElementById('btn-mode-urn');
     const btnModeLocal = document.getElementById('btn-mode-local');
+    const btnModeSplit = document.getElementById('btn-mode-split');
     const urnSection   = document.getElementById('urn-section');
     const localSection = document.getElementById('local-section');
     const fileInput    = document.getElementById('file-input');
+    const panelRight      = document.getElementById('panel-right');
+    const pageImageRight  = document.getElementById('page-image-right');
+    const viewNote        = document.getElementById('view-note');
+    const contentEl       = document.getElementById('content');
+    const textPanelRight  = document.getElementById('text-panel-right');
+    const transcriptRight = document.getElementById('transcript-right');
 
     // Modusbytte
     function setMode(newMode) {
         mode = newMode;
-        btnModeUrn.classList.toggle('active', mode === 'urn');
-        btnModeLocal.classList.toggle('active', mode === 'local');
-        urnSection.classList.toggle('hidden', mode === 'local');
+        btnModeUrn.classList.toggle('active',    mode === 'urn');
+        btnModeLocal.classList.toggle('active',  mode === 'local');
+        btnModeSplit.classList.toggle('active',  mode === 'split');
+        // Splitt viser begge inndatafelt; urn-modus skjuler lokal, lokal-modus skjuler urn
+        urnSection.classList.toggle('hidden',   mode === 'local');
         localSection.classList.toggle('hidden', mode === 'urn');
-        urn = null; pages = []; localFiles = []; currentIndex = 0;
+        contentEl.classList.toggle('split-mode', mode === 'split');
+        panelRight.style.display = 'none';
+        pageImageRight.src = '';
+        viewNote.classList.add('hidden');
+        viewNote.textContent = '';
+        textPanelRight.style.display = 'none';
+        transcriptRight.value = '';
+        showWC(null);
+        urn = null; pages = []; nbPages = []; localFiles = []; currentIndex = 0;
         navSection.classList.add('hidden');
         sidebarDets.classList.add('hidden');
         sidebarDets.style.display = '';
@@ -424,22 +476,56 @@
     }
     btnModeUrn.addEventListener('click',   () => setMode('urn'));
     btnModeLocal.addEventListener('click', () => setMode('local'));
+    btnModeSplit.addEventListener('click', () => setMode('split'));
 
-    // Fil-input (lokal modus)
-    fileInput.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.xml'));
-        files.sort((a, b) => a.name.localeCompare(b.name));
-        localFiles = files;
-        if (files.length === 0) return;
-        pages = files.map(f => ({ label: f.name.replace(/\.xml$/i, ''), page_id: f.name }));
-        currentIndex = 0;
+    function populatePageSelect(pgs) {
         pageSelect.innerHTML = '';
-        pages.forEach((p, i) => {
+        pgs.forEach((p, i) => {
             const opt = document.createElement('option');
             opt.value = i;
             opt.textContent = p.label;
             pageSelect.appendChild(opt);
         });
+    }
+
+    function trySplitRender() {
+        if (localFiles.length === 0 || nbPages.length === 0) return;
+        const count = Math.min(localFiles.length, nbPages.length);
+        pages = localFiles.slice(0, count).map(f => ({ label: f.name.replace(/\.xml$/i, ''), page_id: f.name }));
+        currentIndex = 0;
+        populatePageSelect(pages);
+        navSection.classList.remove('hidden');
+        updateNav();
+        renderPage();
+    }
+
+    // Fil-input (lokal og splitt-modus)
+    fileInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.xml'));
+        files.sort((a, b) => a.name.localeCompare(b.name));
+        localFiles = files;
+        if (files.length === 0) return;
+
+        if (mode === 'split') {
+            // Prøv å hente dokument-URN fra første fil automatisk
+            try {
+                const fd = new FormData();
+                fd.append('file', files[0]);
+                const res  = await fetch(`${APP_ROOT}/api/local/urn`, { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.doc_urn) {
+                    urnInput.value = data.doc_urn;
+                    await fetchPages(data.doc_urn);   // fyller nbPages og kaller trySplitRender
+                    return;
+                }
+            } catch (e) { console.error('local/urn:', e); }
+            trySplitRender();   // fallback hvis URN-henting feilet
+            return;
+        }
+
+        pages = files.map(f => ({ label: f.name.replace(/\.xml$/i, ''), page_id: f.name }));
+        currentIndex = 0;
+        populatePageSelect(pages);
         navSection.classList.remove('hidden');
         updateNav();
         renderPage();
@@ -487,15 +573,14 @@
             if (!res.ok) return;
             const data = await res.json();
             urn = data.urn;
+            if (mode === 'split') {
+                nbPages = data.pages;
+                trySplitRender();
+                return;
+            }
             pages = data.pages;
             currentIndex = 0;
-            pageSelect.innerHTML = '';
-            pages.forEach((p, i) => {
-                const opt = document.createElement('option');
-                opt.value = i;
-                opt.textContent = p.label;
-                pageSelect.appendChild(opt);
-            });
+            populatePageSelect(pages);
             navSection.classList.remove('hidden');
             updateNav();
             renderPage();
@@ -504,18 +589,30 @@
         }
     }
 
-    function showWC(avg_wc) {
-        const score = document.getElementById('wc-score');
+    function applyWCColor(el, avg_wc, naLabel = 'Ikke tilgjengelig') {
         if (avg_wc == null) {
-            score.textContent = 'Ikke tilgjengelig';
-            score.className = 'wc-score wc-na';
+            el.textContent = naLabel;
+            el.className = 'wc-score wc-na';
         } else {
             const pct = avg_wc * 100;
-            score.textContent = pct.toFixed(1) + ' %';
-            if (pct >= 90)      score.className = 'wc-score wc-green';
-            else if (pct >= 70) score.className = 'wc-score wc-orange';
-            else                score.className = 'wc-score wc-red';
+            el.textContent = pct.toFixed(1) + ' %';
+            if (pct >= 90)      el.className = 'wc-score wc-green';
+            else if (pct >= 70) el.className = 'wc-score wc-orange';
+            else                el.className = 'wc-score wc-red';
         }
+    }
+
+    function showWC(avg_wc) {
+        document.getElementById('wc-single').style.display = 'flex';
+        document.getElementById('wc-split-row').style.display = 'none';
+        applyWCColor(document.getElementById('wc-score'), avg_wc);
+    }
+
+    function showWCSplit(localWc, nbWc) {
+        document.getElementById('wc-single').style.display = 'none';
+        document.getElementById('wc-split-row').style.display = 'flex';
+        applyWCColor(document.getElementById('wc-score-local'), localWc, 'N/A');
+        applyWCColor(document.getElementById('wc-score-nb'), nbWc, 'N/A');
     }
 
     function updateNav() {
@@ -524,7 +621,8 @@
     }
 
     async function renderPage() {
-        if (mode === 'local') { await renderLocalPage(); return; }
+        if (mode === 'split')  { await renderSplitPage();  return; }
+        if (mode === 'local')  { await renderLocalPage();  return; }
         if (!urn || pages.length === 0) return;
         const page = pages[currentIndex];
         const view = document.querySelector('input[name="view"]:checked').value;
@@ -546,6 +644,11 @@
                 pageImage.src = 'data:image/png;base64,' + data.image_b64;
                 pageImage.style.display = 'block';
             } else {
+                noImageMsg.classList.remove('hidden');
+            }
+            if (data.view_fallback) {
+                const viewLabel = view === 'tekstlinjer' ? 'Tekstlinjer' : 'Ord';
+                noImageMsg.textContent = `ℹ️ ${viewLabel}-data finnes ikke i denne ALTO-filen – viser tekstblokker.`;
                 noImageMsg.classList.remove('hidden');
             }
 
@@ -599,6 +702,120 @@
         }
     }
 
+    async function renderSplitPage() {
+        if (localFiles.length === 0 || nbPages.length === 0) return;
+        const localFile = localFiles[currentIndex];
+        const nbPage    = nbPages[currentIndex];
+        const view = document.querySelector('input[name="view"]:checked').value;
+
+        spinner.classList.add('active');
+        pageImage.style.display = 'none';
+        noImageMsg.classList.add('hidden');
+        textAreaWrap.style.display = 'none';
+        noTextMsg.classList.add('hidden');
+        panelRight.style.display = 'none';
+
+        try {
+            const formData = new FormData();
+            formData.append('file', localFile);
+            formData.append('view', view);
+
+            const [localData, nbData] = await Promise.all([
+                fetch(`${APP_ROOT}/api/local/render`, { method: 'POST', body: formData }).then(r => r.json()),
+                fetch(`${APP_ROOT}/api/render?urn=${encodeURIComponent(urn)}&page_id=${encodeURIComponent(nbPage.page_id)}&view=${view}`).then(r => r.json()),
+            ]);
+
+            // Venstre: lokal ALTO-overlay
+            if (localData.image_b64) {
+                pageImage.src = 'data:image/png;base64,' + localData.image_b64;
+                pageImage.style.display = 'block';
+            } else {
+                noImageMsg.classList.remove('hidden');
+            }
+
+            // Høyre: NB.no ALTO-overlay
+            if (nbData.image_b64) {
+                pageImageRight.src = 'data:image/png;base64,' + nbData.image_b64;
+                panelRight.style.display = 'block';
+            }
+            if (nbData.view_fallback) {
+                const viewLabel = view === 'tekstlinjer' ? 'Tekstlinjer' : 'Ord';
+                viewNote.textContent = `ℹ️ ${viewLabel}-data finnes ikke i NB.no-filen – viser tekstblokker.`;
+                viewNote.classList.remove('hidden');
+            } else {
+                viewNote.classList.add('hidden');
+            }
+
+            // Tekst fra lokal fil og NB.no
+            const hasLocalText = localData.full_text && localData.full_text.trim();
+            const hasNbText    = nbData.full_text && nbData.full_text.trim();
+            if (hasLocalText) {
+                lastRenderedText = localData.full_text;
+                transcript.value = localData.full_text;
+                transcriptRight.value = hasNbText
+                    ? nbData.full_text
+                    : '(Ingen OCR-tekst tilgjengelig i NB.no-filen for denne siden)';
+                textPanelRight.style.display = 'block';
+                textAreaWrap.style.display = 'block';
+            } else if (hasNbText) {
+                transcript.value = '';
+                transcriptRight.value = nbData.full_text;
+                textPanelRight.style.display = 'block';
+                textAreaWrap.style.display = 'block';
+            } else {
+                noTextMsg.classList.remove('hidden');
+            }
+
+            // Metadata fra NB.no
+            if (nbData.metadata) {
+                const m = nbData.metadata;
+                metaBody.innerHTML = [
+                    m.title ? `<div class="meta-row"><strong>Tittel:</strong> ${m.title}</div>` : '',
+                    m.year  ? `<div class="meta-row"><strong>År:</strong> ${m.year}</div>` : '',
+                    `<div class="meta-row"><strong>URN:</strong> <a href="https://www.nb.no/items/${urn}" target="_blank">nb.no/items/${urn}</a></div>`,
+                ].join('');
+            }
+
+            // OCR fra lokal fil
+            if (localData.ocr_info && localData.ocr_info.length) {
+                ocrBody.innerHTML = localData.ocr_info
+                    .map(l => `<div class="meta-row">${l.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</div>`)
+                    .join('');
+            } else {
+                ocrBody.innerHTML = '<div class="msg-info">Ingen OCR-informasjon tilgjengelig.</div>';
+            }
+
+            if (nbData.links) {
+                linkImage.href = nbData.links.image;
+                linkAlto.href  = nbData.links.alto;
+                linkAlto.style.display = '';
+            }
+
+            // Nedlasting: lokal tekst via Blob
+            dlPage.removeAttribute('href');
+            dlPage.onclick = (e) => {
+                e.preventDefault();
+                if (!lastRenderedText) return;
+                const blob = new Blob([lastRenderedText], { type: 'text/plain' });
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = localFile.name.replace(/\.xml$/i, '.txt');
+                a.click();
+                URL.revokeObjectURL(blobUrl);
+            };
+            dlFull.style.display = 'none';
+
+            showWCSplit(localData.avg_wc, nbData.avg_wc);
+            sidebarDets.classList.remove('hidden');
+            sidebarDets.style.display = 'flex';
+        } catch(e) {
+            console.error('renderSplitPage:', e);
+        } finally {
+            spinner.classList.remove('active');
+        }
+    }
+
     async function renderLocalPage() {
         if (localFiles.length === 0) return;
         const file = localFiles[currentIndex];
@@ -628,6 +845,7 @@
             if (data.full_text && data.full_text.trim()) {
                 lastRenderedText = data.full_text;
                 transcript.value = data.full_text;
+                textPanelRight.style.display = 'none';
                 textAreaWrap.style.display = 'block';
             } else {
                 noTextMsg.classList.remove('hidden');
@@ -647,6 +865,15 @@
 
             linkImage.href = data.image_url || '#';
             linkAlto.style.display = 'none';
+
+            // Splitt-modus: vis originalbilde til høyre
+            if (mode === 'split' && data.image_url) {
+                const rightUrl = data.image_url.replace(/\/pct:\d+\//, '/pct:50/');
+                pageImageRight.src = rightUrl;
+                panelRight.style.display = 'block';
+            } else {
+                panelRight.style.display = 'none';
+            }
 
             // Last ned denne siden via Blob
             dlPage.removeAttribute('href');

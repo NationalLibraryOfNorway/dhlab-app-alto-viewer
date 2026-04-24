@@ -7,7 +7,7 @@ from flask import Flask, Blueprint, render_template, request, jsonify, Response,
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from alto_utils import parse_alto, extract_avg_wc, extract_ocr_info, extract_image_url
+from alto_utils import parse_alto, extract_avg_wc, extract_ocr_info, extract_image_url, extract_doc_urn
 from image_utils import fetch_image, plot_alto, fetch_image_from_url
 from download_utils import fetch_alto
 from metadata_utils import fetch_iiif_manifest, get_page_list, get_metadata, extract_urn_or_lookup
@@ -98,14 +98,21 @@ def api_render():
         'ord':          (words,       'green', False),
     }
     elements, color, show_numbers = view_map.get(view, (text_blocks, 'red', True))
+    view_fallback = False
+    if not elements and text_blocks:
+        elements, color, show_numbers = text_blocks, 'red', True
+        view_fallback = True
     image_b64 = plot_alto(image, width, height, elements, color=color, show_numbers=show_numbers)
 
     return jsonify({
-        'image_b64': image_b64,
-        'full_text': full_text,
-        'metadata':  metadata,
-        'ocr_info':  ocr_info,
-        'avg_wc':    avg_wc,
+        'image_b64':    image_b64,
+        'full_text':    full_text,
+        'metadata':     metadata,
+        'ocr_info':     ocr_info,
+        'avg_wc':       avg_wc,
+        'has_lines':    bool(lines),
+        'has_words':    bool(words),
+        'view_fallback': view_fallback,
         'links': {
             'image': f"https://www.nb.no/services/image/resolver/{page_id}/full/pct:66/0/native.jpg",
             'alto':  f"https://api.nb.no/catalog/v1/metadata/{urn}/altos/{page_id}",
@@ -204,15 +211,38 @@ def local_render():
         'ord':          (words,       'green', False),
     }
     elements, color, show_numbers = view_map.get(view, (text_blocks, 'red', True))
+    view_fallback = False
+    if not elements and text_blocks:
+        elements, color, show_numbers = text_blocks, 'red', True
+        view_fallback = True
     image_b64 = plot_alto(image, width, height, elements, color=color, show_numbers=show_numbers)
 
     return jsonify({
-        'image_b64': image_b64,
-        'full_text': full_text,
-        'ocr_info':  ocr_info,
-        'avg_wc':    avg_wc,
-        'image_url': image_url,
+        'image_b64':    image_b64,
+        'full_text':    full_text,
+        'ocr_info':     ocr_info,
+        'avg_wc':       avg_wc,
+        'has_lines':    bool(lines),
+        'has_words':    bool(words),
+        'view_fallback': view_fallback,
+        'image_url':    image_url,
     })
+
+
+@bp.route('/api/local/urn', methods=['POST'])
+def local_urn():
+    """Les dokument-URN fra bilde-URL i en lokal ALTO XML-fil."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'Ingen fil'}), 400
+    f = request.files['file']
+    content = f.read()
+    try:
+        alto_xml = content.decode('utf-8')
+    except UnicodeDecodeError:
+        alto_xml = content.decode('latin-1', errors='replace')
+    image_url = extract_image_url(alto_xml)
+    doc_urn   = extract_doc_urn(image_url)
+    return jsonify({'image_url': image_url, 'doc_urn': doc_urn})
 
 
 app.register_blueprint(bp, url_prefix='/alto-viewer')
