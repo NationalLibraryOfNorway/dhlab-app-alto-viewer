@@ -243,6 +243,22 @@
         .mode-btn.active { background: var(--aubergine); color: var(--hvit); border-color: var(--aubergine); }
         input[type="file"] { font-family: var(--sans); font-size: 12px; width: 100%; }
         .help-text { font-size: 11px; color: #1A1A1A99; margin-top: 0.25rem; }
+
+        #wc-badge {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--kant);
+            border-radius: 4px;
+            background: var(--hvit);
+            font-size: 13px;
+        }
+        .wc-score { font-weight: 700; font-size: 15px; }
+        .wc-green  { color: #2a7a2a; }
+        .wc-orange { color: #c07000; }
+        .wc-red    { color: #c0392b; }
+        .wc-na     { color: #1A1A1A99; font-weight: 400; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -322,6 +338,10 @@
                 </div>
             </div>
         </details>
+        <div id="wc-badge">
+            <span>Word Confidence</span>
+            <span id="wc-score" class="wc-score">–</span>
+        </div>
     </div>
 </aside>
 
@@ -484,6 +504,20 @@
         }
     }
 
+    function showWC(avg_wc) {
+        const score = document.getElementById('wc-score');
+        if (avg_wc == null) {
+            score.textContent = 'Ikke tilgjengelig';
+            score.className = 'wc-score wc-na';
+        } else {
+            const pct = avg_wc * 100;
+            score.textContent = pct.toFixed(1) + ' %';
+            if (pct >= 90)      score.className = 'wc-score wc-green';
+            else if (pct >= 70) score.className = 'wc-score wc-orange';
+            else                score.className = 'wc-score wc-red';
+        }
+    }
+
     function updateNav() {
         btnPrev.disabled = currentIndex <= 0;
         btnNext.disabled = currentIndex >= pages.length - 1;
@@ -554,6 +588,7 @@
             // Nedlasting enkeltside
             dlPage.href = `${APP_ROOT}/api/download/page?urn=${encodeURIComponent(urn)}&page_id=${encodeURIComponent(page.page_id)}`;
 
+            showWC(data.avg_wc);
             sidebarDets.classList.remove('hidden');
             sidebarDets.style.display = 'flex';
 
@@ -628,6 +663,7 @@
             };
             dlFull.style.display = 'none';
 
+            showWC(data.avg_wc);
             sidebarDets.classList.remove('hidden');
             sidebarDets.style.display = 'flex';
         } catch (e) {

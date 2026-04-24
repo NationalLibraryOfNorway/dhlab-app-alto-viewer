@@ -163,8 +163,9 @@ def extract_avg_wc(alto_xml):
         root = ET.fromstring(alto_xml)
     except ET.ParseError:
         return None
+    ns = {"alto": root.tag.split("}")[0].strip("{")} if "}" in root.tag else {"alto": ""}
     wc_values = []
-    for word in root.findall(".//String"):
+    for word in root.findall(".//alto:String", ns):
         wc_str = word.attrib.get("WC")
         if wc_str:
             try:
