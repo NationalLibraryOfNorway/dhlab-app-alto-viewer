@@ -60,8 +60,8 @@ def parse_alto(alto_xml):
             continue
         for block in area.findall(".//alto:TextBlock", ns):
             try:
-                x, y, w, h = (int(block.attrib.get('HPOS', 0)), int(block.attrib.get('VPOS', 0)),
-                              int(block.attrib.get('WIDTH', 0)), int(block.attrib.get('HEIGHT', 0)))
+                x, y, w, h = (round(float(block.attrib.get('HPOS', 0))), round(float(block.attrib.get('VPOS', 0))),
+                              round(float(block.attrib.get('WIDTH', 0))), round(float(block.attrib.get('HEIGHT', 0))))
             except ValueError:
                 continue
             bx = round(x * block_scale_x)
@@ -74,8 +74,8 @@ def parse_alto(alto_xml):
             block_text = []
             for line in block.findall("alto:TextLine", ns):
                 try:
-                    lx, ly, lw, lh = (int(line.attrib.get('HPOS', 0)), int(line.attrib.get('VPOS', 0)),
-                                      int(line.attrib.get('WIDTH', 0)), int(line.attrib.get('HEIGHT', 0)))
+                    lx, ly, lw, lh = (round(float(line.attrib.get('HPOS', 0))), round(float(line.attrib.get('VPOS', 0))),
+                                      round(float(line.attrib.get('WIDTH', 0))), round(float(line.attrib.get('HEIGHT', 0))))
                 except ValueError:
                     continue
                 lines.append((lx, ly, lw, lh))
@@ -83,8 +83,8 @@ def parse_alto(alto_xml):
                 line_text = []
                 for string in line.findall("alto:String", ns):
                     try:
-                        wx, wy, ww, wh = (int(string.attrib.get('HPOS', 0)), int(string.attrib.get('VPOS', 0)),
-                                          int(string.attrib.get('WIDTH', 0)), int(string.attrib.get('HEIGHT', 0)))
+                        wx, wy, ww, wh = (round(float(string.attrib.get('HPOS', 0))), round(float(string.attrib.get('VPOS', 0))),
+                                          round(float(string.attrib.get('WIDTH', 0))), round(float(string.attrib.get('HEIGHT', 0))))
                     except ValueError:
                         continue
                     words.append((wx, wy, ww, wh))
