@@ -410,6 +410,7 @@
     let localFiles = [];
     let lastRenderedText = '';
     let nbPages = [];
+    let splitPairs = [];   // [{file, nbPage}] matchet på side-ID
 
     const urnInput     = document.getElementById('urn-input');
     const navSection   = document.getElementById('nav-section');
@@ -462,7 +463,7 @@
         textPanelRight.style.display = 'none';
         transcriptRight.value = '';
         showWC(null);
-        urn = null; pages = []; nbPages = []; localFiles = []; currentIndex = 0;
+        urn = null; pages = []; nbPages = []; localFiles = []; splitPairs = []; currentIndex = 0;
         navSection.classList.add('hidden');
         sidebarDets.classList.add('hidden');
         sidebarDets.style.display = '';
@@ -490,8 +491,25 @@
 
     function trySplitRender() {
         if (localFiles.length === 0 || nbPages.length === 0) return;
-        const count = Math.min(localFiles.length, nbPages.length);
-        pages = localFiles.slice(0, count).map(f => ({ label: f.name.replace(/\.xml$/i, ''), page_id: f.name }));
+
+        // Match lokale filer mot NB.no-sider på side-ID (filnavn uten .xml)
+        const nbPageMap = {};
+        nbPages.forEach(p => { nbPageMap[p.page_id] = p; });
+
+        splitPairs = [];
+        localFiles.forEach(f => {
+            const pageId = f.name.replace(/\.xml$/i, '');
+            const nbPage = nbPageMap[pageId];
+            if (nbPage) splitPairs.push({ file: f, nbPage });
+        });
+
+        if (splitPairs.length === 0) {
+            // Ingen ID-treff – fall tilbake til indeksrekkefølge
+            const count = Math.min(localFiles.length, nbPages.length);
+            splitPairs = localFiles.slice(0, count).map((f, i) => ({ file: f, nbPage: nbPages[i] }));
+        }
+
+        pages = splitPairs.map(p => ({ label: p.nbPage.label, page_id: p.file.name }));
         currentIndex = 0;
         populatePageSelect(pages);
         navSection.classList.remove('hidden');
@@ -703,9 +721,8 @@
     }
 
     async function renderSplitPage() {
-        if (localFiles.length === 0 || nbPages.length === 0) return;
-        const localFile = localFiles[currentIndex];
-        const nbPage    = nbPages[currentIndex];
+        if (splitPairs.length === 0) return;
+        const { file: localFile, nbPage } = splitPairs[currentIndex];
         const view = document.querySelector('input[name="view"]:checked').value;
 
         spinner.classList.add('active');
