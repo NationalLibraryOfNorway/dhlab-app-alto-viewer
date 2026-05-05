@@ -522,6 +522,7 @@
         const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.xml'));
         files.sort((a, b) => a.name.localeCompare(b.name));
         localFiles = files;
+        fileInput.value = '';   // nullstill slik at samme mappe kan velges igjen
         if (files.length === 0) return;
 
         if (mode === 'split') {
